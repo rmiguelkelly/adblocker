@@ -1,5 +1,5 @@
 
-#include "dns_fowarder.h"
+#include "dns_forwarder.h"
 #include "dns_server.h"
 #include <iostream>
 
@@ -16,21 +16,21 @@
 using std::cout;
 using std::endl;
 
-dns_fowarder::dns_fowarder() {
+dns_forwarder::dns_forwarder() {
     this->port = 53;
 
 }
 
-void dns_fowarder::Start() {
+void dns_forwarder::Start() {
     this->is_running = true;
     this->run_main_loop();
 }
 
-void dns_fowarder::Stop() {
+void dns_forwarder::Stop() {
     this->is_running = false;
 }
 
-int dns_fowarder::run_main_loop() {
+int dns_forwarder::run_main_loop() {
     
     int listener = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -63,7 +63,7 @@ int dns_fowarder::run_main_loop() {
     return 0;
 }
 
-void dns_fowarder::handle_dns_request(int socket) {
+void dns_forwarder::handle_dns_request(int socket) {
 
     struct sockaddr_storage store;
     memset(&store, 0, sizeof(store));
