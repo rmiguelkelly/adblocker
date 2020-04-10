@@ -20,7 +20,8 @@ using std::endl;
 
 dns_forwarder::dns_forwarder() {
     this->port = 53;
-
+    std::string path = "./blacklist.txt";
+    this->blacklist = std::make_unique<domain_blacklist>(path);
 }
 
 void dns_forwarder::Start() {
@@ -79,8 +80,6 @@ void dns_forwarder::handle_dns_request(int socket) {
     char buffer[1024];
     int recv_size = recvfrom(socket, buffer, sizeof(buffer), 0, (struct sockaddr*)&store, &store_size);
 
-    ///START ///START ///START ///START ///START ///START ///START
-
     struct dns_packet *recv_packet = (struct dns_packet*)buffer;
 
     std::string url = "";
@@ -95,16 +94,12 @@ void dns_forwarder::handle_dns_request(int socket) {
         start_index += len + 1;
     }
     url.pop_back();
-    
-    cout << "Request for " << url << endl;
-    if (url == "www.example.com") {
+
+    if (this->should_block(url)) {
         cout << "DROPPED FOR " << url << endl;
         send_bad_request(recv_packet->id, socket, (struct sockaddr*)&store, store_size);
         return;
     }
-    
-
-    ///END ///END ///END ///END ///END ///END ///END ///END ///END ///END
     
     char to_client_buffer[1024];
     
@@ -130,13 +125,6 @@ void dns_forwarder::send_bad_request(short dns_id, int socket, struct sockaddr *
     sendto(socket, buffer, sizeof(bad_packet), 0, addr, size);
 }
 
-
-void dns_forwarder::print_dns_packet(char packet[], int size) {
-    for (int i = 0; i < size; i++) {
-        printf("%.2x ", packet[i]);
-        if (i % 16 == 0 && i > 0) {
-            printf("\n");
-        }
-    }
-    printf("\n");
+bool dns_forwarder::should_block(string url) {
+    return this->blacklist->should_block(url);
 }
