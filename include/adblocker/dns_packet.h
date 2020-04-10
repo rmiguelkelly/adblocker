@@ -1,4 +1,6 @@
 
+//Packet structure copied from https://gist.github.com/fffaraz/9d9170b57791c28ccda9255b48315168
+//Thank you!
 struct dns_packet
 {
     unsigned short id; // identification number

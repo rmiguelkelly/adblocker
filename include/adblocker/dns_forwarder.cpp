@@ -13,6 +13,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 #endif
 
 using std::cout;
@@ -59,7 +61,7 @@ int dns_forwarder::run_main_loop() {
         return -1;
     }
 
-    cout << "Awaiting DNS requests..." << endl;
+    this->print_server_details();
 
     while (is_running) {
         this->handle_dns_request(listener);
@@ -96,7 +98,10 @@ void dns_forwarder::handle_dns_request(int socket) {
     url.pop_back();
 
     if (this->should_block(url)) {
-        cout << "DROPPED FOR " << url << endl;
+        //If in debug mode, print out which domains have been blocked
+        if (BLOCKER_DEBUG) {
+            cout << "DROPPED FOR " << url << endl;
+        }
         send_bad_request(recv_packet->id, socket, (struct sockaddr*)&store, store_size);
         return;
     }
@@ -127,4 +132,42 @@ void dns_forwarder::send_bad_request(short dns_id, int socket, struct sockaddr *
 
 bool dns_forwarder::should_block(string url) {
     return this->blacklist->should_block(url);
+}
+
+void dns_forwarder::print_server_details() {
+    char hostname_buffer[256];
+    int hname_len = gethostname(hostname_buffer, sizeof(hostname_buffer));
+    if (hname_len < 0) {
+        return;
+    }
+
+    cout << "========================================" << endl;
+    cout << "| Home DNS server awaiting clients..." << endl;
+    cout << "| Host name: " << hostname_buffer << endl;
+
+    struct ifaddrs *iflist, *iface;
+    if (getifaddrs(&iflist) < 0) {
+        return;
+    }
+    for (iface = iflist; iface; iface = iface->ifa_next) {
+        int af = iface->ifa_addr->sa_family;
+        const void *addr;
+        char addrp[INET6_ADDRSTRLEN];
+        switch (af) {
+            case AF_INET:
+                addr = &((struct sockaddr_in *)iface->ifa_addr)->sin_addr;
+                break;
+            default:
+                addr = NULL;
+        }
+        if (addr) {
+            if (inet_ntop(af, addr, addrp, sizeof addrp) == NULL) {
+                continue;
+            }
+            cout << "| Available IPv4 Address: " << addrp << endl;
+        }
+    }
+    freeifaddrs(iflist);
+    cout << "| Process ID: " << getpid() << endl;
+    cout << "========================================" << endl;    
 }
