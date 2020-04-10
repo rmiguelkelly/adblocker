@@ -1,7 +1,9 @@
 
 #include "dns_forwarder.h"
 #include "dns_server.h"
+#include "dns_packet.h"
 #include <iostream>
+#include <thread>
 
 #ifdef __WIN32__
 #include <winsock.h>
@@ -23,6 +25,7 @@ dns_forwarder::dns_forwarder() {
 
 void dns_forwarder::Start() {
     this->is_running = true;
+    
     this->run_main_loop();
 }
 
@@ -56,14 +59,18 @@ int dns_forwarder::run_main_loop() {
     }
 
     cout << "Awaiting DNS requests..." << endl;
+
     while (is_running) {
         this->handle_dns_request(listener);
     }
 
+    cout << "DNS server has stopped running" << endl;
     return 0;
 }
 
 void dns_forwarder::handle_dns_request(int socket) {
+
+    bool should_drop = false;
 
     struct sockaddr_storage store;
     memset(&store, 0, sizeof(store));
@@ -71,6 +78,33 @@ void dns_forwarder::handle_dns_request(int socket) {
 
     char buffer[1024];
     int recv_size = recvfrom(socket, buffer, sizeof(buffer), 0, (struct sockaddr*)&store, &store_size);
+
+    ///START ///START ///START ///START ///START ///START ///START
+
+    struct dns_packet *recv_packet = (struct dns_packet*)buffer;
+
+    std::string url = "";
+    int start_index = sizeof(struct dns_packet);
+
+    while (buffer[start_index] != 0) {
+        int len = buffer[start_index];
+        for (int i = start_index + 1; i <= start_index + len; i++) {
+            url += buffer[i];
+        }
+        url += '.';
+        start_index += len + 1;
+    }
+    url.pop_back();
+    
+    cout << "Request for " << url << endl;
+    if (url == "www.example.com") {
+        cout << "DROPPED FOR " << url << endl;
+        send_bad_request(recv_packet->id, socket, (struct sockaddr*)&store, store_size);
+        return;
+    }
+    
+
+    ///END ///END ///END ///END ///END ///END ///END ///END ///END ///END
     
     char to_client_buffer[1024];
     
@@ -78,10 +112,31 @@ void dns_forwarder::handle_dns_request(int socket) {
     unsigned int port = 53;
     dns_server server(server_addr, port);
 
-    cout << "Forwarding request" << endl;
     int recv_size_auth = server.send_dns_packet_raw(buffer, recv_size, to_client_buffer, sizeof(to_client_buffer));
 
     int sent = sendto(socket, to_client_buffer, recv_size_auth, 0, (struct sockaddr*)&store, store_size);
+}
 
-    cout << sent << endl;
+void dns_forwarder::send_bad_request(short dns_id, int socket, struct sockaddr *addr, socklen_t size) {
+    dns_packet bad_packet;
+    memset(&bad_packet, 0, sizeof(bad_packet));
+    bad_packet.id = dns_id;
+    bad_packet.rcode    = 0x3;
+    bad_packet.qr       = 0x1;
+    bad_packet.opcode   = 0x0;
+
+    char *buffer = (char*)&bad_packet;
+
+    sendto(socket, buffer, sizeof(bad_packet), 0, addr, size);
+}
+
+
+void dns_forwarder::print_dns_packet(char packet[], int size) {
+    for (int i = 0; i < size; i++) {
+        printf("%.2x ", packet[i]);
+        if (i % 16 == 0 && i > 0) {
+            printf("\n");
+        }
+    }
+    printf("\n");
 }
